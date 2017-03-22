@@ -1,0 +1,12 @@
+To compile:
+
+$ configure
+$ make
+
+To run:
+
+$ cd src
+$ ./kafka_proxy -b localhost:9092 -p 8888
+
+  -b tells kafka_proxy the location of the kafka brokers.
+  -p tells kafka_proxy the port number to listen to.
