@@ -15,14 +15,13 @@ typedef boost::shared_ptr<tcp::socket> socket_ptr;
 class KafkaProxy : public boost::asio::io_service {
 private:
     int _port;
-    const char *_brokers;
 
 private:
     static void session(socket_ptr sock);
     static void timer_cb(void);
     
 public:
-    KafkaProxy(int port, const char *brokers = NULL);
+    KafkaProxy(int port);
     void run(void);
 };
 

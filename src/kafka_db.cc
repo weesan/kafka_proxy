@@ -3,11 +3,16 @@
 
 using Json = nlohmann::json;
 
-KafkaDB::KafkaDB (const string &topic, const string &gid) :
+/*
+ * Constructor.
+ */
+KafkaDB::KafkaDB (const string &topic, const string &gid,
+                  const string &db_path) :
     _db(new Db(NULL, 0)),
     _dbc(NULL),
     _topic(topic),
-    _gid(gid)
+    _gid(gid),
+    _db_path(db_path.empty() ? KAFKA_DB_PATH : db_path)
 {
     if (!_db) {
         fprintf(stderr, "Failed to init a bdb.");
@@ -24,6 +29,9 @@ KafkaDB::KafkaDB (const string &topic, const string &gid) :
     fprintf(stderr, "Opened %s\n", db_file().c_str());
 }
 
+/*
+ * Destructor.
+ */
 KafkaDB::~KafkaDB (void)
 {
     // Using boost::shared_ptr, so no need to free here.
@@ -39,6 +47,10 @@ KafkaDB::~KafkaDB (void)
     fprintf(stderr, "Closed %s\n", db_file().c_str());
 }
 
+/*
+ * Add key-value to the DB.  In this case, partition + offset is the
+ * key and data is the value.
+ */
 void KafkaDB::put (int32_t partition, int64_t offset, void *data, size_t len)
 {
     Key key(partition, offset);
@@ -53,6 +65,9 @@ void KafkaDB::put (int32_t partition, int64_t offset, void *data, size_t len)
     }
 }
 
+/*
+ * Retrieve a single key-value from the DB.
+ */
 const KafkaDB::Value KafkaDB::get (int32_t partition, int64_t offset)
 {
     Key key(partition, offset);
@@ -69,6 +84,9 @@ const KafkaDB::Value KafkaDB::get (int32_t partition, int64_t offset)
     return value;
 }
 
+/*
+ * Retrieve a number of key-value's from the DB in json format.
+ */
 const char *KafkaDB::get (int n, string &response) {
     lock_guard<mutex> lock(_mutex);
 
@@ -107,6 +125,9 @@ const char *KafkaDB::get (int n, string &response) {
     return response.c_str();
 }
 
+/*
+ * Delete a key (partition + offset) from the DB.
+ */
 bool KafkaDB::del (int32_t partition, int64_t offset)
 {
     Key key(partition, offset);
@@ -123,6 +144,9 @@ bool KafkaDB::del (int32_t partition, int64_t offset)
     return true;
 }
 
+/*
+ * Dump all the key-value from the DB.
+ */
 void KafkaDB::dump(void) {
     printf("Dump ...\n");
     Dbc *dbc = NULL;

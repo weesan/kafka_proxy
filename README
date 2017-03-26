@@ -1,12 +1,25 @@
 To compile:
 
-$ configure
-$ make
+    $ configure
+    $ make
 
 To run:
 
-$ cd src
-$ ./kafka_proxy -b localhost:9092 -p 8888
+    $ cd src
+    $ ./kafka_proxy -b localhost:9092 -p 8888
 
-  -b tells kafka_proxy the location of the kafka brokers.
-  -p tells kafka_proxy the port number to listen to.
+      -b tells kafka_proxy the location of the kafka brokers.
+      -p tells kafka_proxy the port number to listen to.
+
+Currently, kafka_proxy supports the following RESTful APIs:
+
+1. GET /_consume?gid=<id>&topic=<topic>&size=<n>
+
+   For example:
+   $ curl -s -XGET 'http://localhost:8888/_consume?gid=bar&topic=foo&size=3'
+
+2. DELETE /_delete?gid=<id>&topic=<topic>&partition=<partition>&offset=<offset>
+ 
+   For example: 
+   $ curl -s -XDELETE 'http://localhost:8888/_delete?gid=bar&topic=foo&partition=0&offset=2'
+ 

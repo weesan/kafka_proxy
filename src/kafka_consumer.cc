@@ -1,8 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
+#include <string.h>
 #include <librdkafka/rdkafkacpp.h>
 #include <string>
+#include <dirent.h>
 #include "kafka_consumer.h"
 
 #define KAFKA_BROKERS_DEFAULT    "localhost:9092"
@@ -23,6 +25,16 @@ static void sigterm (int sig)
 
 /*
  * Local classes.
+ */
+
+/*
+ * Callback class when partition re-balance is needed.  For example,
+ * when a new consumer belonging to a consumder group subscribes to a
+ * topic, the partitions of the topic will be reshuffled among the
+ * consumers in the same consumer group.  Another case is when the #
+ * of partitions of an existing topic has been increased, the
+ * partitions of the topic will be reshuffled among existing consumers
+ * in the same consumer group.
  */
 class MyRebalanceCb : public RdKafka::RebalanceCb {
 public:
@@ -62,6 +74,9 @@ public:
     }
 };
 
+/*
+ * Event callback class.
+ */
 class MyEventCb : public RdKafka::EventCb {
 public:
     void event_cb (RdKafka::Event &event) {
@@ -96,6 +111,9 @@ public:
     }
 };
 
+/*
+ * Offset commit callback class.
+ */
 class MyOffsetCommitCb : public RdKafka::OffsetCommitCb {
 public:
     void offset_commit_cb (RdKafka::ErrorCode err,
@@ -121,12 +139,14 @@ public:
  */
 
 KafkaConsumer::KafkaConsumer (const string &brokers,
-                              const string &topic, const string &gid) :
-    KafkaDB(topic, gid),
+                              const string &topic, const string &gid,
+                              const string &db_path) :
+    KafkaDB(topic, gid, db_path),
     _brokers(brokers.empty() ? KAFKA_BROKERS_DEFAULT : brokers),
     _consumer(NULL)
 {
     string errstr;
+
     RdKafka::Conf *conf = RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL);
     if (!conf) {
         fprintf(stderr, "Failed to create kafka conf.\n");
@@ -134,10 +154,19 @@ KafkaConsumer::KafkaConsumer (const string &brokers,
     }
 
     RdKafka::Conf *tconf = RdKafka::Conf::create(RdKafka::Conf::CONF_TOPIC);
+
+    // For new topics, we always consume from the beginning.
+    if (tconf->set("auto.offset.reset", "smallest", errstr) !=
+        RdKafka::Conf::CONF_OK) {
+        fprintf(stderr, "Failed to setup auto.offset.reset: %s\n",
+                errstr.c_str());
+        exit(-1);
+    }
+
+    // Setup the topic config.
     conf->set("default_topic_conf", tconf, errstr);
     delete tconf;
 
-    printf("==> brokers: [%s]\n", _brokers.c_str());
     // Set the brokers.
     if (conf->set("metadata.broker.list", _brokers, errstr)
         != RdKafka::Conf::CONF_OK) {
@@ -167,7 +196,7 @@ KafkaConsumer::KafkaConsumer (const string &brokers,
     }
     
     // Set the consumer group id.
-    if (conf->set("group.id",  gid, errstr) !=
+    if (conf->set("group.id", gid, errstr) !=
         RdKafka::Conf::CONF_OK) {
         fprintf(stderr, "Failed to create group id: %s\n", errstr.c_str());
         exit(-1);
@@ -232,16 +261,19 @@ void KafkaConsumer::process (RdKafka::Message *message)
         break;
     case RdKafka::ERR_NO_ERROR:
         /* Real message */
+        /*
         printf("Partition %d offset %d len %d key %s value %.*s\n",
                message->partition(), message->offset(), message->len(),
                message->key() ? message->key()->c_str() : "null",
                message->len(), static_cast<const char *>(message->payload()));
+        */
         put(message->partition(), message->offset(),
             message->payload(), message->len());
         break;
     case RdKafka::ERR__PARTITION_EOF:
         /* Last message */
-        fprintf(stderr, "Partition %d ends\n", message->partition());
+        fprintf(stderr, "(%s, %s): Partition %d ends\n",
+                topic().c_str(), gid().c_str(), message->partition());
         break;
     case RdKafka::ERR__UNKNOWN_TOPIC:
     case RdKafka::ERR__UNKNOWN_PARTITION:
@@ -278,6 +310,57 @@ KafkaConsumers::~KafkaConsumers (void) {
     shutdown();
 }
 
+bool KafkaConsumers::parse_db_name (const char *db_name,
+                                    string &topic, string &gid)
+{
+    char kafka_str[256] = {0};
+    char topic_str[256] = {0};
+    char gid_str[256]   = {0};
+    char db_str[256]    = {0};
+    
+    int n = sscanf(db_name, "%[^\\-]-%[^\\-]-%[^\\.].%s",
+                   kafka_str, topic_str, gid_str, db_str);
+    if (n == 4 &&
+        strcmp(kafka_str, "kafka") == 0 &&
+        strcmp(db_str, "db") == 0) {
+        // Ok.
+        topic = topic_str;
+        gid = gid_str;
+        return true;
+    } else {
+        // Not ok.
+        return false;
+    }
+}
+
+void KafkaConsumers::scandir(const char *path)
+{
+    struct dirent **namelist = NULL;
+    int n = ::scandir(path, &namelist, NULL, alphasort);
+    if (n < 0) {
+        fprintf(stderr, "Warning: failed to scandir(%s)\n", path);
+    } else {
+        while (n--) {
+            string topic, gid;
+            
+            if (parse_db_name(namelist[n]->d_name, topic, gid)) {
+                fprintf(stderr, "Loading existing db %s/%s\n",
+                        path, namelist[n]->d_name);
+                // Subsribe topic and create consumer group.
+                (*this)(topic, gid);
+            }
+            free(namelist[n]);
+        }
+        free(namelist);
+    }
+}
+
+void KafkaConsumers::setDBPath(const string &db_path) {
+    _db_path = db_path;
+
+    scandir(_db_path.c_str());
+}
+
 KafkaConsumer &KafkaConsumers::operator() (const string &topic,
                                            const string &gid)
 {
@@ -285,7 +368,8 @@ KafkaConsumer &KafkaConsumers::operator() (const string &topic,
     if (itr != end()) {
         return *itr->second;
     } else {
-        KafkaConsumer *consumer = new KafkaConsumer(_brokers, topic, gid);
+        KafkaConsumer *consumer =
+            new KafkaConsumer(_brokers, topic, gid, _db_path);
         if (!consumer) {
             throw "Out of memory";
         }

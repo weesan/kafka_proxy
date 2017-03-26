@@ -34,13 +34,6 @@ bool http_parser (const char *req, int len, HttpRequest &request)
     request["method"] = method;
     request["query"] = query;
     request["version"] = version;
-    /*
-    string tmp;
-    getline(iss, tmp);
-    printf("=> [%s]\n", tmp.c_str());
-    getline(iss, tmp);
-    printf("=> [%s]\n", tmp.c_str());
-    */
     
     // Reset iss to the query string.
     iss.clear();

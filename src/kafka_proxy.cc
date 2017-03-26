@@ -25,6 +25,9 @@ using boost::asio::ip::tcp;
  * Static functions.
  */
 
+/*
+ * Process the HTTP GET request.
+ */
 static void process_get (socket_ptr sock, HttpRequest &request,
                          string &response)
 {
@@ -46,6 +49,9 @@ static void process_get (socket_ptr sock, HttpRequest &request,
     kafka(topic, gid).get(size, response);
 }
 
+/*
+ * Process the HTTP POST request.
+ */
 static void process_post (socket_ptr sock, HttpRequest &request,
                           string &response)
 {
@@ -54,6 +60,9 @@ static void process_post (socket_ptr sock, HttpRequest &request,
             __FUNCTION__, request["method"].c_str());
 }
 
+/*
+ * Process the HTTP DELETE request.
+ */
 static void process_delete (socket_ptr sock, HttpRequest &request,
                             string &response)
 {
@@ -84,9 +93,8 @@ static void process_delete (socket_ptr sock, HttpRequest &request,
  * KafkaProxy class.
  */
 
-KafkaProxy::KafkaProxy(int port, const char *brokers) :
-    _port(port),
-    _brokers(brokers) {
+KafkaProxy::KafkaProxy(int port) :
+    _port(port) {
     // Start a timer thread.
     boost::thread(boost::bind(timer_cb));
 }

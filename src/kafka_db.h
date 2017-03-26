@@ -21,6 +21,7 @@ private:
     mutex _mutex;
     string _topic;
     string _gid;
+    string _db_path;
 
 public:
     class Key : public Dbt {
@@ -78,7 +79,8 @@ public:
     };
 
 public:
-    KafkaDB(const string &topic, const string &gid);
+    KafkaDB(const string &topic, const string &gid,
+            const string &db_path = KAFKA_DB_PATH);
     virtual ~KafkaDB(void);
     const string &topic(void) const {
         return _topic;
@@ -87,7 +89,7 @@ public:
         return _gid;
     }
     const string db_file(void) const {
-        return string(KAFKA_DB_PATH) + "kafka-" + _topic + "-" + _gid + ".db";
+        return _db_path + "/" + "kafka-" + _topic + "-" + _gid + ".db";
     }
     void put(int32_t partition, int64_t offset, void *data, size_t len);
     const Value get(int32_t partition, int64_t offset);

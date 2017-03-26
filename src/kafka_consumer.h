@@ -21,7 +21,8 @@ private:
     
 public:
     KafkaConsumer(const string &brokers,
-                  const string &topic, const string &gid);
+                  const string &topic, const string &gid,
+                  const string &db_path = "");
     ~KafkaConsumer(void);
     void shutdown(void);
     void consume(int timeout = KAFKA_CONSUMER_TIMEOUT);
@@ -30,13 +31,19 @@ public:
 class KafkaConsumers : public unordered_map<string, KafkaConsumer *> {
 private:
     string _brokers;
+    string _db_path;
     
+private:
+    void scandir(const char *path);
+    bool parse_db_name(const char *db_name, string &topic, string &gid);
+
 public:
     KafkaConsumers(void);
     ~KafkaConsumers(void);
     void setBrokers(const string &brokers) {
         _brokers = brokers;
     }
+    void setDBPath(const string &db_path);
     void shutdown(void);
     KafkaConsumer &operator()(const string &topic, const string &gid);
 };
