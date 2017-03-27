@@ -1,3 +1,17 @@
+Kafka Proxy provides a way for the Kafka consumers belonged to the
+same consumer group to be able to scale beyond the total numbers of
+partitions for a single topic.  By design, the total numbers of the
+Kafka consumers belonged to the same consumer group cannot be larger
+than the total numbers of paritions for a single topic.  Kafka Proxy
+solves this issue by acting as a single consumer to consume the Kafka
+messages from a single topic on the consumers' behave, and providing a
+set of RESTful APIs to the consumers to consume the messages from the
+proxy.  To eliminate to chances of processing the same messages, the
+consumers need to explicitly send acks to the proxy to indicate that
+they have finished processing those messages via the RESTful APIs.
+The order of the messages is not guaranteed even from the same
+partition.
+
 To compile:
 
     $ configure
@@ -6,10 +20,11 @@ To compile:
 To run:
 
     $ cd src
-    $ ./kafka_proxy -b localhost:9092 -p 8888
+    $ ./kafka_proxy -b localhost:9092 -p 8888 -P /tmp/kafka_proxy
 
       -b tells kafka_proxy the location of the kafka brokers.
       -p tells kafka_proxy the port number to listen to.
+      -P tells kafka_proxy the path to the DB files.
 
 Currently, kafka_proxy supports the following RESTful APIs:
 
