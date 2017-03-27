@@ -32,6 +32,7 @@ static void process_get (socket_ptr sock, HttpRequest &request,
                          string &response)
 {
     int size = atoi(request()["size"].c_str());
+    size = size ? size: 1;
 
     string ep("/_consume?");
     int pos = request["query"].find(ep);

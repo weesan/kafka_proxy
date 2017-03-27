@@ -14,6 +14,22 @@
 
 using namespace std;
 
+struct KafkaKey {
+    // _partition must be the first field!
+    int32_t _partition;
+    int64_t _offset;
+
+    KafkaKey(int32_t partition, int64_t offset) :
+        _partition(partition), _offset(offset) {
+    }
+    // Note: for KafkaKey to be the key for unordered_map, we need to define:
+    // 1. operator==
+    // 2. a key hasher struct with operator().
+    bool operator==(const KafkaKey &key) const {
+        return _partition == key._partition && _offset == key._offset;
+    }
+};
+
 class KafkaDB {
 private:
     boost::shared_ptr<Db> _db;
@@ -24,14 +40,10 @@ private:
     string _db_path;
 
 public:
-    class Key : public Dbt {
-    private:
-        // _partition has to be the first field.
-        int32_t _partition;
-        int64_t _offset;
-
+    class Key : public Dbt, private KafkaKey {
     public:
-        Key(int32_t partition = 0, int64_t offset = 0) {
+        Key(int32_t partition = 0, int64_t offset = 0) :
+            KafkaKey(partition, offset) {
             memset(this, 0, sizeof(Key));
             _partition = partition;
             _offset = offset;
