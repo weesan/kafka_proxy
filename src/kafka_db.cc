@@ -131,13 +131,14 @@ const KafkaDB::Value KafkaDB::get (int32_t partition, int64_t offset)
  * Retrieve a number of key-value's from the DB in json format.
  */
 const char *KafkaDB::get (int n, string &response) {
-    lock_guard<mutex> lock(_mutex);
-
-    if (!_dbc) {
-        if (_db->cursor(NULL, &_dbc, 0)) {
-            DB_ERROR("Failed to call cursor()");
-            exit(-1);
-        } 
+    {
+        lock_guard<mutex> lock(_mutex);
+        if (!_dbc) {
+            if (_db->cursor(NULL, &_dbc, 0)) {
+                DB_ERROR("Failed to call cursor()");
+                exit(-1);
+            } 
+        }
     }
 
     Json json;
@@ -145,17 +146,23 @@ const char *KafkaDB::get (int n, string &response) {
         Key key;
         Value value;
 
-        if (_dbc->get(&key, &value, DB_NEXT)) {
-            // End of the cursor.
-            _dbc->close();
-            _dbc = NULL;
-            break;
-        }
+        {
+            lock_guard<mutex> lock(_mutex);
+            if (_dbc->get(&key, &value, DB_NEXT)) {
+                // End of the cursor.
+                _dbc->close();
+                _dbc = NULL;
+                break;
+            }
 
-        // If the message is still outstanding (ie. not being ack'd by
-        // the client, we will skip that.
-        if (outstanding_msgs.outstanding(key.partition(), key.offset())) {
-            continue;
+            // If the message is still outstanding (ie. not being ack'd by
+            // the client, we will skip that.
+            if (outstanding_msgs.outstanding(key.partition(), key.offset())) {
+                continue;
+            }
+
+            // Keep track of the outstanding messages.
+            outstanding_msgs.add(key.partition(), key.offset());
         }
         
         // Construct the json response.
@@ -166,9 +173,6 @@ const char *KafkaDB::get (int n, string &response) {
         snprintf(data, sizeof(data), "%.*s", value.size(), value.data());
         j["message"] = data;
         json.push_back(j);
-
-        // Keep track of the outstanding messages.
-        outstanding_msgs.add(key.partition(), key.offset());
     }
         
     // Gather the result.
@@ -182,15 +186,14 @@ const char *KafkaDB::get (int n, string &response) {
  */
 bool KafkaDB::del (int32_t partition, int64_t offset)
 {
-    lock_guard<mutex> lock(_mutex);
-
-    // Remove the outstadning message first.
-    outstanding_msgs.del(partition, offset);
-
-    // Delete the key from the DB.
-    Key key(partition, offset);
-
     try {
+        lock_guard<mutex> lock(_mutex);
+
+        // Remove the outstadning message first.
+        outstanding_msgs.del(partition, offset);
+        
+        // Delete the key from the DB.
+        Key key(partition, offset);
         if (_db->del(NULL, &key, 0)) {
             DB_ERROR("Failed to call del()");
         }
