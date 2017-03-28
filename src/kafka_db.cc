@@ -131,16 +131,6 @@ const KafkaDB::Value KafkaDB::get (int32_t partition, int64_t offset)
  * Retrieve a number of key-value's from the DB in json format.
  */
 const char *KafkaDB::get (int n, string &response) {
-    {
-        lock_guard<mutex> lock(_mutex);
-        if (!_dbc) {
-            if (_db->cursor(NULL, &_dbc, 0)) {
-                DB_ERROR("Failed to call cursor()");
-                exit(-1);
-            } 
-        }
-    }
-
     Json json;
     for (int i = 0; i < n; i++) {
         Key key;
@@ -148,6 +138,14 @@ const char *KafkaDB::get (int n, string &response) {
 
         {
             lock_guard<mutex> lock(_mutex);
+            
+            if (!_dbc) {
+                if (_db->cursor(NULL, &_dbc, 0)) {
+                    DB_ERROR("Failed to call cursor()");
+                    exit(-1);
+                } 
+            }
+            
             if (_dbc->get(&key, &value, DB_NEXT)) {
                 // End of the cursor.
                 _dbc->close();

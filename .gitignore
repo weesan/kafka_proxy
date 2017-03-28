@@ -5,6 +5,7 @@ autom4te.cache
 config.h
 config.log
 config.status
+core
 src/.deps/
 src/Makefile
 src/kafka_proxy
