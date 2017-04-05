@@ -10,12 +10,26 @@
  *
  * $ curl -s -XGET 'http://localhost:8888/_consume?gid=bar&topic=foo&size=3'
  * $ curl -s -XDELETE 'http://localhost:8888/_delete?gid=bar&topic=foo&partition=0&offset=2'
+ * $ curl -s -XPOST 'http://localhost:8888/_delete?gid=bar&topic=foo' -d '
+ * 0 2
+ * 1 4
+ * '
+ *
+ * In the case of POST with _delete endpoint, the data contains rows
+ * of values.  Each row represents the partition and offset in the
+ * respective order.  This API was designed to acknowledge multiple
+ * partition-offset pairs in high throughput.
  */
 
 #include <string>
 #include "kafka_proxy.h"
 #include "kafka_consumer.h"
 #include "http_parser.h"
+
+#define HTTP_OK           "HTTP/1.0 200 OK\r\n\r\n"
+#define HTTP_PARTIAL_OK   "HTTP/1.0 206 Partial Content\r\n\r\n"
+#define HTTP_BAD_REQUEST  "HTTP/1.0 400 Bad Request\r\n\r\n"
+#define HTTP_NOT_FOUND    "HTTP/1.0 404 Not Found\r\n\r\n"
 
 using namespace std;
 //using namespace boost;
@@ -35,10 +49,10 @@ static void process_get (socket_ptr sock, HttpRequest &request,
     size = size ? size: 1;
 
     string ep("/_consume?");
-    int pos = request["query"].find(ep);
+    int pos = request.query().find(ep);
 
     if (pos == string::npos) {
-        response = "HTTP/1.0 400 Bad Request\r\n\r\n";
+        response = HTTP_BAD_REQUEST;
         return;
     }
 
@@ -46,7 +60,7 @@ static void process_get (socket_ptr sock, HttpRequest &request,
     const string &gid     = request()["gid"];
         
     // Construct the response.
-    response = "HTTP/1.0 200 OK\r\n\r\n";
+    response = HTTP_OK;
     kafka(topic, gid).get(size, response);
 }
 
@@ -56,9 +70,58 @@ static void process_get (socket_ptr sock, HttpRequest &request,
 static void process_post (socket_ptr sock, HttpRequest &request,
                           string &response)
 {
-    response = "HTTP/1.0 200 OK\r\n\r\n";
-    fprintf(stderr, "%s: request: [%s]\n",
-            __FUNCTION__, request["method"].c_str());
+    string ep("/_delete?");
+    int pos = request.query().find(ep);
+
+    if (pos == string::npos) {
+        response = HTTP_BAD_REQUEST;
+        return;
+    }
+
+    response = HTTP_OK;
+
+    const string &topic = request()["topic"];
+    const string &gid   = request()["gid"];
+    int total_good;
+    int total_bad;
+    
+    istringstream iss(request.data());
+    string line;
+
+    // Going thru. each line for data.
+    while (getline(iss, line)) {
+        if (!line.size()) {
+            continue;
+        }
+
+        // Process each partition-offset pair.
+        stringstream ss(line);
+        int32_t partition;
+        int64_t offset;
+
+        if (ss >> partition >> offset) {
+            //printf("%d %ld\n", partition, offset);
+            
+            if (kafka(topic, gid).del(partition, offset)) {
+                //fprintf(stderr, "Deleting topic %s parition %d offset %lu\n",
+                //        topic.c_str(), partition, offset);
+                total_good++;
+            } else {
+                total_bad++;
+            }
+        }
+    }
+
+    if (total_good && total_bad) {
+        // Some good and some bad.
+        response = HTTP_PARTIAL_OK;
+    } else if (total_good) {
+        // All good.
+        response = HTTP_OK;
+    } else {
+        // All bad, or no good nor bad.
+        response = HTTP_BAD_REQUEST;
+    }
 }
 
 /*
@@ -68,10 +131,10 @@ static void process_delete (socket_ptr sock, HttpRequest &request,
                             string &response)
 {
     string ep("/_delete?");
-    int pos = request["query"].find(ep);
+    int pos = request.query().find(ep);
 
     if (pos == string::npos) {
-        response = "HTTP/1.0 400 Bad Request\r\n\r\n";
+        response = HTTP_BAD_REQUEST;
         return;
     }
 
@@ -80,13 +143,13 @@ static void process_delete (socket_ptr sock, HttpRequest &request,
     int32_t partition = atoi(request()["partition"].c_str());
     int64_t offset = atoll(request()["offset"].c_str());
     
-    fprintf(stderr, "Deleting topic %s parition %d offset %lu\n",
-            topic.c_str(), partition, offset);
+    //fprintf(stderr, "Deleting topic %s parition %d offset %lu\n",
+    //        topic.c_str(), partition, offset);
 
     if (kafka(topic, gid).del(partition, offset)) {
-        response = "HTTP/1.0 200 OK\r\n\r\n";
+        response = HTTP_OK;
     } else {
-        response = "HTTP/1.0 404 Not Found\r\n\r\n";
+        response = HTTP_NOT_FOUND;
     }
 }
 
@@ -126,7 +189,7 @@ void KafkaProxy::session (socket_ptr sock) {
         //request.dump();
         
         // Parse the request and get the size.
-        const char *method = request["method"].c_str();
+        const char *method = request.method().c_str();
         string response;
 
         if (strcasecmp(method, "GET") == 0) {
@@ -136,7 +199,7 @@ void KafkaProxy::session (socket_ptr sock) {
         } else if (strcasecmp(method, "DELETE") == 0) {
             process_delete(sock, request, response);
         } else {
-            response = "HTTP/1.0 200 OK\r\n\r\n";
+            response = HTTP_OK;
         }
         
         boost::asio::write(*sock,

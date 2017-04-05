@@ -16,6 +16,18 @@ public:
     HttpRequestBase &operator()() {
         return _params;
     }
+    const string &method(void) {
+        return (*this)["_method_"];
+    }
+    const string &query(void) {
+        return (*this)["_query_"];
+    }
+    const string &version(void) {
+        return (*this)["_version_"];
+    }
+    const string &data(void) {
+        return (*this)["_data_"];
+    }
     void dump(void) {
         for (const_iterator itr = begin(); itr != end(); ++itr) {
             printf("%s: %s\n", itr->first.c_str(), itr->second.c_str());
@@ -24,7 +36,6 @@ public:
              itr != _params.end(); ++itr) {
             printf("  %s: %s\n", itr->first.c_str(), itr->second.c_str());
         }
-        
     }
 };
 

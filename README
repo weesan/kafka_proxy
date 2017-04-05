@@ -38,3 +38,19 @@ Currently, kafka_proxy supports the following RESTful APIs:
    For example: 
    $ curl -s -XDELETE 'http://localhost:8888/_delete?gid=bar&topic=foo&partition=0&offset=2'
  
+3. POST /_delete?gid=bar&topic=foo
+   part1 offset1
+   part2 offset2
+   ..
+
+   For example:
+   $ curl -s -XPOST 'http://localhost:8888/_delete?gid=bar&topic=foo' -d '
+   0 2
+   1 4
+   '
+ 
+   In the case of POST with _delete endpoint, the data contains rows
+   of values.  Each row represents the partition and offset in the
+   respective order.  This API was designed to acknowledge multiple
+   partition-offset pairs in high throughput.  In the example above,
+   two partition-offset pairs will be acknowledged.
