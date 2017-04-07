@@ -83,13 +83,13 @@ public:
         switch (event.type()) {
         case RdKafka::Event::EVENT_ERROR:
             fprintf(stderr, "Error: %s: %s",
-                    RdKafka::err2str(event.err()).c_str(), event.str());
+                    RdKafka::err2str(event.err()).c_str(), event.str().c_str());
             //if (event.err() == RdKafka::ERR__ALL_BROKERS_DOWN) {
             //    run = false;
             //}
             break;
         case RdKafka::Event::EVENT_STATS:
-            fprintf(stderr, "STATS: %s\n", event.str());
+            fprintf(stderr, "STATS: %s\n", event.str().c_str());
             break;
         case RdKafka::Event::EVENT_LOG:
             fprintf(stderr, "LOG-%i-%s: %s\n",
@@ -105,7 +105,7 @@ public:
             fprintf(stderr, "EVENT %s (%s): %s\n",
                     event.type(),
                     err2str(event.err()),
-                    event.str());
+                    event.str().c_str());
             break;
         }
     }
