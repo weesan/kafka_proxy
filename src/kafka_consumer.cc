@@ -98,13 +98,13 @@ public:
         case RdKafka::Event::EVENT_THROTTLE:
             fprintf(stderr, "THROTTLED: %dms by %s id %d\n",
                     event.throttle_time(), 
-                    event.broker_name(),
+                    event.broker_name().c_str(),
                     (int)event.broker_id());
             break;
         default:
             fprintf(stderr, "EVENT %s (%s): %s\n",
                     event.type(),
-                    err2str(event.err()),
+                    err2str(event.err()).c_str(),
                     event.str().c_str());
             break;
         }
@@ -170,7 +170,7 @@ KafkaConsumer::KafkaConsumer (const string &brokers,
     // Set the brokers.
     if (conf->set("metadata.broker.list", _brokers, errstr)
         != RdKafka::Conf::CONF_OK) {
-        fprintf(stderr, "Failed to set the brokers: %s\n", _brokers);
+        fprintf(stderr, "Failed to set the brokers: %s\n", _brokers.c_str());
         exit(-1);
     }
 
@@ -220,7 +220,7 @@ KafkaConsumer::KafkaConsumer (const string &brokers,
     RdKafka::ErrorCode ret = _consumer->subscribe(topics);
     if (ret) {
         fprintf(stderr, "Failed to subscribe to topic: %s\n",
-                RdKafka::err2str(ret));
+                RdKafka::err2str(ret).c_str());
         exit(-1);
     }
 
@@ -277,11 +277,12 @@ void KafkaConsumer::process (RdKafka::Message *message)
         break;
     case RdKafka::ERR__UNKNOWN_TOPIC:
     case RdKafka::ERR__UNKNOWN_PARTITION:
-        fprintf(stderr, "Unknown topic/partition: %s\n", message->errstr());
+        fprintf(stderr, "Unknown topic/partition: %s\n",
+                message->errstr().c_str());
         break;
     default:
         /* Errors */
-        fprintf(stderr, "Failed to consume: %s\n", message->errstr());
+        fprintf(stderr, "Failed to consume: %s\n", message->errstr().c_str());
         break;
     }
 }
