@@ -18,21 +18,31 @@ struct KafkaKeyHasher {
     }
 };
 
+/*
+ * OutstandingMsgs is a basically a hash using the KafkaKey
+ * (ie. partition + offset) as the key and the timeout as the value.
+ * When adding a key, the key is set to be expired in the future
+ * (ie. now() + timeout).  That way, each key can potentially have
+ * different timeout.
+ */
 class OutstandingMsgs :
     public unordered_map<KafkaKey, time_t, KafkaKeyHasher> {
 
 public:
     bool outstanding(int32_t partition, int64_t offset) {
         auto itr = find(KafkaKey(partition, offset));
-        if (itr != end() &&
-            time(NULL) - itr->second <= KAFKA_OUTSTANDING_MSG_TTL) {
+        if (itr != end() && time(NULL) <= itr->second) {
             return true;
         }
 
         return false;
     }
-    void add(int32_t partition, int64_t offset) {
-        (*this)[KafkaKey(partition, offset)] = time(NULL);
+    void add(int32_t partition, int64_t offset, int timeout = 0) {
+        if (timeout == 0) {
+            timeout = KAFKA_OUTSTANDING_MSG_TTL;
+        }
+        // The timeout is set to be expired in the future.
+        (*this)[KafkaKey(partition, offset)] = time(NULL) + timeout;
     }
     void del(int32_t partition, int64_t offset) {
         erase(KafkaKey(partition, offset));
@@ -130,7 +140,7 @@ const KafkaDB::Value KafkaDB::get (int32_t partition, int64_t offset)
 /*
  * Retrieve a number of key-value's from the DB in json format.
  */
-const char *KafkaDB::get (int n, string &response) {
+const char *KafkaDB::get (int n, string &response, int timeout) {
     Json json;
     for (int i = 0; i < n; i++) {
         Key key;
@@ -160,7 +170,7 @@ const char *KafkaDB::get (int n, string &response) {
             }
 
             // Keep track of the outstanding messages.
-            outstanding_msgs.add(key.partition(), key.offset());
+            outstanding_msgs.add(key.partition(), key.offset(), timeout);
         }
         
         // Construct the json response.

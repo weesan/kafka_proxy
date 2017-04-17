@@ -105,7 +105,7 @@ public:
     }
     void put(int32_t partition, int64_t offset, void *data, size_t len);
     const Value get(int32_t partition, int64_t offset);
-    const char *get(int n, string &response);
+    const char *get(int n, string &response, int timeout = 0);
     bool del(int32_t partition, int64_t offset);
     void dump(void);
 };

@@ -3,8 +3,9 @@
  *
  * RESTful APIs:
  *
- * GET /_consume?gid=<id>&topic=<topic>&size=<n>
+ * GET /_consume?gid=<id>&topic=<topic>&size=<n>&timeout=<secs>
  * DELETE /_delete?gid=<id>&topic=<topic>&partition=<partition>&offset=<offset>
+ * POST /_delete?gid=<id>&topic=<topic>
  *
  * For example:
  *
@@ -45,9 +46,6 @@ using boost::asio::ip::tcp;
 static void process_get (socket_ptr sock, HttpRequest &request,
                          string &response)
 {
-    int size = atoi(request()["size"].c_str());
-    size = size ? size: 1;
-
     string ep("/_consume?");
     int pos = request.query().find(ep);
 
@@ -56,12 +54,17 @@ static void process_get (socket_ptr sock, HttpRequest &request,
         return;
     }
 
+    int size = atoi(request()["size"].c_str());
+    size = size ? size: 1;
+
+    int timeout = atoi(request()["timeout"].c_str());
+    
     const string &topic   = request()["topic"];
     const string &gid     = request()["gid"];
         
     // Construct the response.
     response = HTTP_OK;
-    kafka(topic, gid).get(size, response);
+    kafka(topic, gid).get(size, response, timeout);
 }
 
 /*
